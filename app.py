@@ -3,6 +3,7 @@ from repo_loader import load_repo_from_github
 from qa_engine import ask_llm
 from embedder import create_embeddings
 from vector_store import build_index, search
+from chunker import chunk_code
 
 app = FastAPI()
 
@@ -12,13 +13,25 @@ repo_data = []
 def load_repo(repo_url: str):
 
     global repo_data
-    repo_data = load_repo_from_github(repo_url)
 
-    # Create embeddings for the loaded repository
-    embeddings = create_embeddings([file["content"] for file in repo_data])
+    raw_files = load_repo_from_github(repo_url)
+
+    repo_data = []
+
+    for file in raw_files:
+        chunks = chunk_code(file["file"], file["content"])
+        repo_data.extend(chunks)
+
+    texts = [chunk["content"] for chunk in repo_data]
+
+    embeddings = create_embeddings(texts)
+
     build_index(embeddings, repo_data)
 
-    return {"files_loaded": len(repo_data)}
+    return {
+        "files_loaded": len(raw_files),
+        "chunks_created": len(repo_data)
+    }
 
 
 @app.post("/ask")
